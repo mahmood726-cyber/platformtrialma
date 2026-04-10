@@ -163,6 +163,13 @@ table tr:hover td{background:rgba(79,195,247,0.04)}
 <script>
 "use strict";
 
+// --- CSV injection guard ---
+function csvSafe(s) {
+  s = String(s);
+  if (/^[=+@\t\r]/.test(s)) return "'" + s;
+  return s;
+}
+
 // ===== DEMO DATA =====
 const DEMO_CSV = `Platform,Arm,ArmType,Effect_vs_Control,SE,StartMonth,EndMonth,N
 RECOVERY,Dexamethasone,Treatment,-0.17,0.05,0,18,2104
@@ -1083,7 +1090,7 @@ function exportCSV() {
     const lo = Math.exp(data.pooled - 1.96 * data.se);
     const hi = Math.exp(data.pooled + 1.96 * data.se);
     const platforms = data.entries.map(e => e.platform).join(';');
-    csv += `${trt},${data.pooled.toFixed(5)},${hr.toFixed(5)},${data.se.toFixed(5)},${lo.toFixed(5)},${hi.toFixed(5)},${data.nTrials},${platforms}\n`;
+    csv += `${csvSafe(trt)},${data.pooled.toFixed(5)},${hr.toFixed(5)},${data.se.toFixed(5)},${lo.toFixed(5)},${hi.toFixed(5)},${data.nTrials},${csvSafe(platforms)}\n`;
   }
   csv += `\nOverall,${lastResults.overall.beta.toFixed(5)},${Math.exp(lastResults.overall.beta).toFixed(5)},${lastResults.overall.se.toFixed(5)},${Math.exp(lastResults.overall.ci_lo).toFixed(5)},${Math.exp(lastResults.overall.ci_hi).toFixed(5)},${lastResults.k},all\n`;
   csv += `\ntau2,${lastResults.tau2.toFixed(6)}\nI2,${lastResults.I2.toFixed(2)}\nQ,${lastResults.Q.toFixed(4)}\n`;
