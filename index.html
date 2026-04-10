@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta property="og:title" content="Platform Trial Meta-Analysis">
+<meta property="og:description" content="Browser-based meta-analysis for adaptive platform trials with shared control arm covariance handling">
+<title>Platform Trial Meta-Analysis</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e17;--surface:rgba(20,28,45,0.85);--glass:rgba(30,42,70,0.55);
+  --border:rgba(100,140,220,0.18);--text:#e0e6f0;--text2:#8a9bc0;
+  --accent:#4fc3f7;--accent2:#7c4dff;--danger:#ff5252;--success:#69f0ae;
+  --gold:#ffd740;--radius:12px;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+.app-header{text-align:center;padding:28px 16px 12px;background:linear-gradient(135deg,rgba(30,42,70,0.7),rgba(15,20,35,0.9));border-bottom:1px solid var(--border)}
+.app-header h1{font-size:1.8rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.app-header p{color:var(--text2);font-size:0.92rem;margin-top:4px}
+.container{max-width:1400px;margin:0 auto;padding:20px 16px;display:grid;gap:20px}
+.card{background:var(--glass);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:box-shadow .2s}
+.card:hover{box-shadow:0 4px 24px rgba(79,195,247,0.08)}
+.card h2{font-size:1.1rem;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2::before{content:'';width:4px;height:18px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:2px}
+.input-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.input-row label{color:var(--text2);font-size:0.88rem;min-width:80px}
+select,input[type="number"],input[type="text"]{background:rgba(15,20,35,0.8);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.88rem}
+select:focus,input:focus{outline:none;border-color:var(--accent)}
+textarea{width:100%;background:rgba(10,15,25,0.9);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'Consolas','Courier New',monospace;font-size:0.82rem;resize:vertical;min-height:160px}
+textarea:focus{outline:none;border-color:var(--accent)}
+button{cursor:pointer;border:none;border-radius:8px;padding:8px 20px;font-size:0.9rem;font-weight:600;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.btn-secondary{background:rgba(100,140,220,0.15);color:var(--accent);border:1px solid var(--border)}
+.btn-secondary:hover{background:rgba(100,140,220,0.25)}
+.btn-danger{background:rgba(255,82,82,0.15);color:var(--danger);border:1px solid rgba(255,82,82,0.3)}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.toggle-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.toggle{position:relative;width:42px;height:22px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:rgba(100,140,220,0.2);border-radius:11px;transition:.3s}
+.toggle .slider::before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle input:checked+.slider{background:var(--accent)}
+.toggle input:checked+.slider::before{transform:translateX(20px)}
+.results-grid{display:grid;gap:20px;grid-template-columns:1fr}
+.svg-container{width:100%;overflow-x:auto}
+.svg-container svg{display:block;max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:0.85rem}
+table th{background:rgba(79,195,247,0.1);color:var(--accent);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+table td{padding:7px 10px;border-bottom:1px solid rgba(100,140,220,0.08)}
+table tr:hover td{background:rgba(79,195,247,0.04)}
+.cov-matrix{display:inline-block;margin:8px 0}
+.cov-matrix table{font-family:'Consolas',monospace}
+.cov-matrix td{text-align:right;min-width:80px}
+.cov-diag{background:rgba(79,195,247,0.15) !important;font-weight:600}
+.cov-offdiag{background:rgba(255,215,64,0.12) !important;color:var(--gold)}
+.status-bar{padding:8px 14px;border-radius:6px;font-size:0.85rem;margin-top:10px}
+.status-ok{background:rgba(105,240,174,0.1);color:var(--success);border:1px solid rgba(105,240,174,0.2)}
+.status-warn{background:rgba(255,215,64,0.1);color:var(--gold);border:1px solid rgba(255,215,64,0.2)}
+.status-err{background:rgba(255,82,82,0.1);color:var(--danger);border:1px solid rgba(255,82,82,0.2)}
+#results-section{display:none}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}}
+.forest-label{font-size:12px;fill:var(--text)}
+.forest-line{stroke:var(--text2);stroke-width:1}
+.forest-diamond{fill:var(--accent);opacity:0.85}
+.forest-square{fill:var(--accent2)}
+.forest-ci{stroke:var(--text);stroke-width:1.5}
+.gantt-bar{rx:3;ry:3}
+.gantt-control{fill:rgba(79,195,247,0.6)}
+.gantt-treatment{fill:rgba(124,77,255,0.7)}
+.gantt-text{font-size:11px;fill:var(--text)}
+.legend-item{display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:0.82rem;color:var(--text2)}
+.legend-swatch{width:14px;height:14px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Platform Trial Meta-Analysis</h1>
+  <p>Shared control arm covariance handling for adaptive platform trials</p>
+</header>
+
+<div class="container">
+  <!-- Input Panel -->
+  <div class="card" id="input-panel">
+    <h2>Data Input</h2>
+    <div class="input-row">
+      <label>Input Mode</label>
+      <select id="input-mode">
+        <option value="per-arm">Per-Arm Data</option>
+        <option value="pre-computed">Pre-Computed</option>
+      </select>
+    </div>
+    <textarea id="csv-input" placeholder="Paste CSV data here..."></textarea>
+    <div class="input-row" style="margin-top:10px">
+      <label>tau^2</label>
+      <select id="tau-mode">
+        <option value="auto">Auto (DL)</option>
+        <option value="manual">Manual</option>
+      </select>
+      <input type="number" id="tau-manual" step="0.001" min="0" value="0.01" style="width:90px;display:none" aria-label="Manual tau-squared value">
+    </div>
+    <div class="toggle-row">
+      <label class="toggle"><input type="checkbox" id="nca-toggle"><span class="slider"></span></label>
+      <span style="color:var(--text2);font-size:0.88rem">Non-concurrent control adjustment</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()">Analyze</button>
+      <button class="btn-secondary" id="btn-demo" onclick="loadDemo()">Load Demo Data</button>
+      <button class="btn-danger" onclick="clearAll()">Clear</button>
+    </div>
+    <div id="status-msg"></div>
+  </div>
+
+  <!-- Results Section -->
+  <div id="results-section">
+    <!-- Timeline -->
+    <div class="card">
+      <h2>Platform Trial Timeline</h2>
+      <div class="svg-container" id="timeline-container"></div>
+    </div>
+
+    <!-- Forest Plot -->
+    <div class="card">
+      <h2>Treatment Forest Plot (HR scale)</h2>
+      <div class="svg-container" id="forest-container"></div>
+    </div>
+
+    <div class="two-col">
+      <!-- Covariance Matrices -->
+      <div class="card">
+        <h2>Covariance Matrices</h2>
+        <div id="cov-container"></div>
+      </div>
+
+      <!-- Adjusted vs Unadjusted -->
+      <div class="card" id="nca-card" style="display:none">
+        <h2>Non-Concurrent Adjustment</h2>
+        <div id="nca-container"></div>
+      </div>
+    </div>
+
+    <!-- Summary Table -->
+    <div class="card">
+      <h2>Summary Table</h2>
+      <div id="summary-container"></div>
+    </div>
+
+    <!-- Export -->
+    <div class="card">
+      <h2>Export</h2>
+      <div class="btn-group">
+        <button class="btn-secondary" id="btn-export-csv" onclick="exportCSV()">Export CSV</button>
+        <button class="btn-secondary" id="btn-export-timeline" onclick="exportSVG('timeline-container','platform-timeline.svg')">Export Timeline SVG</button>
+        <button class="btn-secondary" id="btn-export-forest" onclick="exportSVG('forest-container','forest-plot.svg')">Export Forest SVG</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ===== DEMO DATA =====
+const DEMO_CSV = `Platform,Arm,ArmType,Effect_vs_Control,SE,StartMonth,EndMonth,N
+RECOVERY,Dexamethasone,Treatment,-0.17,0.05,0,18,2104
+RECOVERY,Tocilizumab,Treatment,-0.14,0.06,3,24,2022
+RECOVERY,Baricitinib,Treatment,-0.13,0.07,6,24,1656
+RECOVERY,Control,Control,0,0,0,24,4321
+REMAP-CAP,Hydrocortisone,Treatment,-0.10,0.08,0,12,403
+REMAP-CAP,Tocilizumab,Treatment,-0.18,0.07,2,18,353
+REMAP-CAP,Control,Control,0,0,0,18,400
+SOLIDARITY,Remdesivir,Treatment,-0.07,0.06,0,12,2743
+SOLIDARITY,Control,Control,0,0,0,12,2708
+PANORAMIC,Molnupiravir,Treatment,-0.06,0.09,0,8,12529
+PANORAMIC,Control,Control,0,0,0,8,12525`;
+
+function loadDemo() {
+  document.getElementById('csv-input').value = DEMO_CSV;
+  document.getElementById('input-mode').value = 'per-arm';
+  showStatus('Demo data loaded (4 platforms, 7 treatment arms).', 'ok');
+}
+
+function clearAll() {
+  document.getElementById('csv-input').value = '';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('status-msg').innerHTML = '';
+}
+
+function showStatus(msg, type) {
+  const cls = type === 'ok' ? 'status-ok' : type === 'warn' ? 'status-warn' : 'status-err';
+  document.getElementById('status-msg').innerHTML = `<div class="status-bar ${cls}">${msg}</div>`;
+}
+
+// Show/hide manual tau input
+document.getElementById('tau-mode').addEventListener('change', function() {
+  document.getElementById('tau-manual').style.display = this.value === 'manual' ? 'inline-block' : 'none';
+});
+
+// ===== CSV PARSING =====
+function parseCSV(text) {
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) throw new Error('CSV must have header + at least 1 data row');
+  const header = lines[0].split(',').map(h => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(',').map(v => v.trim());
+    const obj = {};
+    header.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+    rows.push(obj);
+  }
+  return { header, rows };
+}
+
+// ===== DATA STRUCTURING =====
+function structurePerArm(rows) {
+  // Group by platform
+  const platforms = {};
+  rows.forEach(r => {
+    const p = r.Platform;
+    if (!platforms[p]) platforms[p] = { name: p, arms: [], control: null };
+    const arm = {
+      name: r.Arm,
+      type: r.ArmType,
+      effect: parseFloat(r.Effect_vs_Control),
+      se: parseFloat(r.SE),
+      startMonth: parseFloat(r.StartMonth),
+      endMonth: parseFloat(r.EndMonth),
+      n: parseInt(r.N)
+    };
+    if (arm.type === 'Control') {
+      platforms[p].control = arm;
+    } else {
+      platforms[p].arms.push(arm);
+    }
+  });
+  return Object.values(platforms);
+}
+
+function structurePreComputed(rows) {
+  // Group by platform
+  const platforms = {};
+  rows.forEach(r => {
+    const p = r.Platform;
+    if (!platforms[p]) platforms[p] = { name: p, arms: [], control: null };
+    const shared = r.SharedControlArms ? r.SharedControlArms.split(';').map(s => s.trim()).filter(s => s) : [];
+    platforms[p].arms.push({
+      name: r.Treatment,
+      type: 'Treatment',
+      effect: parseFloat(r.LogEffect),
+      se: parseFloat(r.SE),
+      controlN: parseInt(r.ControlN),
+      treatmentN: parseInt(r.TreatmentN),
+      sharedWith: shared,
+      startMonth: 0,
+      endMonth: 12,
+      n: parseInt(r.TreatmentN)
+    });
+  });
+  return Object.values(platforms);
+}
+
+// ===== MATRIX OPERATIONS =====
+function matCreate(rows, cols) {
+  const m = [];
+  for (let i = 0; i < rows; i++) {
+    m.push(new Array(cols).fill(0));
+  }
+  return m;
+}
+
+function matCopy(m) {
+  return m.map(r => [...r]);
+}
+
+// Invert 1x1
+function inv1(m) {
+  if (Math.abs(m[0][0]) < 1e-15) return null;
+  return [[1 / m[0][0]]];
+}
+
+// Invert 2x2
+function inv2(m) {
+  const det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+  if (Math.abs(det) < 1e-15) return null;
+  return [
+    [m[1][1] / det, -m[0][1] / det],
+    [-m[1][0] / det, m[0][0] / det]
+  ];
+}
+
+// Invert 3x3
+function inv3(m) {
+  const a = m[0][0], b = m[0][1], c = m[0][2];
+  const d = m[1][0], e = m[1][1], f = m[1][2];
+  const g = m[2][0], h = m[2][1], k = m[2][2];
+  const det = a*(e*k - f*h) - b*(d*k - f*g) + c*(d*h - e*g);
+  if (Math.abs(det) < 1e-15) return null;
+  const inv = [
+    [(e*k - f*h)/det, (c*h - b*k)/det, (b*f - c*e)/det],
+    [(f*g - d*k)/det, (a*k - c*g)/det, (c*d - a*f)/det],
+    [(d*h - e*g)/det, (b*g - a*h)/det, (a*e - b*d)/det]
+  ];
+  return inv;
+}
+
+// Gauss-Jordan inversion for larger matrices
+function invertMatrix(m) {
+  const n = m.length;
+  if (n === 1) return inv1(m);
+  if (n === 2) return inv2(m);
+  if (n === 3) return inv3(m);
+
+  // Gauss-Jordan elimination
+  const aug = matCreate(n, 2 * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) aug[i][j] = m[i][j];
+    aug[i][n + i] = 1;
+  }
+
+  for (let col = 0; col < n; col++) {
+    // Partial pivoting
+    let maxVal = Math.abs(aug[col][col]);
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++) {
+      if (Math.abs(aug[row][col]) > maxVal) {
+        maxVal = Math.abs(aug[row][col]);
+        maxRow = row;
+      }
+    }
+    if (maxVal < 1e-15) return null; // Singular
+    if (maxRow !== col) {
+      [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    }
+
+    const pivot = aug[col][col];
+    for (let j = 0; j < 2 * n; j++) aug[col][j] /= pivot;
+
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const factor = aug[row][col];
+      for (let j = 0; j < 2 * n; j++) aug[row][j] -= factor * aug[col][j];
+    }
+  }
+
+  const result = matCreate(n, n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) result[i][j] = aug[i][n + j];
+  }
+  return result;
+}
+
+// Matrix multiply
+function matMul(a, b) {
+  const m = a.length, n = b[0].length, p = b.length;
+  const r = matCreate(m, n);
+  for (let i = 0; i < m; i++)
+    for (let j = 0; j < n; j++)
+      for (let k = 0; k < p; k++)
+        r[i][j] += a[i][k] * b[k][j];
+  return r;
+}
+
+// Matrix transpose
+function matT(m) {
+  const rows = m.length, cols = m[0].length;
+  const r = matCreate(cols, rows);
+  for (let i = 0; i < rows; i++)
+    for (let j = 0; j < cols; j++)
+      r[j][i] = m[i][j];
+  return r;
+}
+
+// Ensure positive definiteness by clamping eigenvalues (for 2x2 and small)
+// Using nearPD approach: Higham's algorithm (simplified)
+function ensurePD(m) {
+  const n = m.length;
+  // Check if already PD via Cholesky attempt
+  if (choleskyCheck(m)) return m;
+
+  // Simple fix: add small diagonal
+  const fixed = matCopy(m);
+  let eps = 1e-8;
+  for (let iter = 0; iter < 20; iter++) {
+    for (let i = 0; i < n; i++) fixed[i][i] = m[i][i] + eps;
+    if (choleskyCheck(fixed)) return fixed;
+    eps *= 10;
+  }
+  return fixed;
+}
+
+function choleskyCheck(m) {
+  const n = m.length;
+  const L = matCreate(n, n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = 0;
+      for (let k = 0; k < j; k++) sum += L[i][k] * L[j][k];
+      if (i === j) {
+        const val = m[i][i] - sum;
+        if (val <= 0) return false;
+        L[i][j] = Math.sqrt(val);
+      } else {
+        L[i][j] = (m[i][j] - sum) / L[j][j];
+      }
+    }
+  }
+  return true;
+}
+
+// ===== DerSimonian-Laird TAU^2 ESTIMATION =====
+function estimateTauDL(effects, variances) {
+  const k = effects.length;
+  if (k < 2) return 0;
+
+  const w = variances.map(v => 1 / v);
+  const sumW = w.reduce((a, b) => a + b, 0);
+  const weightedMean = effects.reduce((s, e, i) => s + w[i] * e, 0) / sumW;
+
+  let Q = 0;
+  for (let i = 0; i < k; i++) {
+    Q += w[i] * Math.pow(effects[i] - weightedMean, 2);
+  }
+
+  const sumW2 = w.reduce((s, wi) => s + wi * wi, 0);
+  const C = sumW - sumW2 / sumW;
+  const tau2 = Math.max(0, (Q - (k - 1)) / C);
+  return tau2;
+}
+
+// ===== NON-CONCURRENT CONTROL ADJUSTMENT =====
+function computeDriftAdjustment(platform) {
+  // Estimate temporal drift from the control arm
+  // If all arms start at same time, no adjustment needed
+  const arms = platform.arms;
+  if (arms.length < 2) return arms.map(() => 0);
+
+  const control = platform.control;
+  if (!control) return arms.map(() => 0);
+
+  // Check if any non-concurrency exists
+  const starts = arms.map(a => a.startMonth);
+  const allSame = starts.every(s => s === starts[0]);
+  if (allSame) return arms.map(() => 0);
+
+  // Estimate drift: use the difference in effects between arms that started
+  // at different times as a proxy (simplified approach)
+  // Drift rate = slope of effect vs. start month
+  // Using weighted regression of effect on start time
+  const n = arms.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (let i = 0; i < n; i++) {
+    const x = arms[i].startMonth;
+    const y = arms[i].effect;
+    sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+  }
+  const meanX = sumX / n;
+  const denom = sumXX - n * meanX * meanX;
+  if (Math.abs(denom) < 1e-10) return arms.map(() => 0);
+
+  const driftRate = (sumXY - n * meanX * (sumY / n)) / denom;
+
+  // Control midpoint
+  const controlMid = control ? (control.startMonth + control.endMonth) / 2 : 0;
+
+  // Correction for each arm
+  return arms.map(arm => {
+    const armMid = (arm.startMonth + arm.endMonth) / 2;
+    const deltaT = armMid - controlMid;
+    return driftRate * deltaT;
+  });
+}
+
+// ===== GLS POOLING WITH SHARED CONTROL COVARIANCE =====
+function buildCovBlock(platform, tau2) {
+  const K = platform.arms.length;
+  if (K === 0) return { V: [], effects: [], arms: [] };
+  if (K === 1) {
+    const v = platform.arms[0].se * platform.arms[0].se + tau2;
+    return {
+      V: [[v]],
+      effects: [platform.arms[0].effect],
+      arms: [platform.arms[0]]
+    };
+  }
+
+  // Multi-arm platform: shared control covariance = tau^2 / 2
+  const V = matCreate(K, K);
+  for (let i = 0; i < K; i++) {
+    for (let j = 0; j < K; j++) {
+      if (i === j) {
+        V[i][j] = platform.arms[i].se * platform.arms[i].se + tau2;
+      } else {
+        V[i][j] = tau2 / 2; // Shared control arm
+      }
+    }
+  }
+
+  return {
+    V: V,
+    effects: platform.arms.map(a => a.effect),
+    arms: platform.arms
+  };
+}
+
+function poolGLS(platforms, tau2, useNCA) {
+  // Build block-diagonal covariance matrix and effect vector
+  const blocks = [];
+  let totalK = 0;
+
+  platforms.forEach(p => {
+    const block = buildCovBlock(p, tau2);
+    if (block.effects.length > 0) {
+      // Apply NCA if enabled
+      let effects = [...block.effects];
+      let adjustments = null;
+      if (useNCA) {
+        adjustments = computeDriftAdjustment(p);
+        effects = effects.map((e, i) => e - adjustments[i]);
+      }
+      blocks.push({
+        ...block,
+        effects: effects,
+        adjustments: adjustments,
+        platform: p.name,
+        K: block.effects.length
+      });
+      totalK += block.effects.length;
+    }
+  });
+
+  if (totalK === 0) return null;
+
+  // Assemble block-diagonal matrix
+  const fullV = matCreate(totalK, totalK);
+  const Y = [];
+  let offset = 0;
+
+  blocks.forEach(b => {
+    for (let i = 0; i < b.K; i++) {
+      Y.push(b.effects[i]);
+      for (let j = 0; j < b.K; j++) {
+        fullV[offset + i][offset + j] = b.V[i][j];
+      }
+    }
+    offset += b.K;
+  });
+
+  // Ensure PD
+  const pdV = ensurePD(fullV);
+
+  // GLS: beta = (X'V^{-1}X)^{-1} X'V^{-1}Y
+  // X is column of 1s (overall pooled effect)
+  const Vinv = invertMatrix(pdV);
+  if (!Vinv) return null;
+
+  // X = column vector of 1s
+  const X = Y.map(() => [1]);
+  const Xt = matT(X);
+
+  const XtVinv = matMul(Xt, Vinv);
+  const XtVinvX = matMul(XtVinv, X);
+  const XtVinvY = matMul(XtVinv, Y.map(y => [y]));
+
+  const betaVar = 1 / XtVinvX[0][0];
+  const beta = XtVinvY[0][0] * betaVar;
+  const betaSE = Math.sqrt(betaVar);
+
+  // Per-treatment pooling (for treatments appearing in multiple platforms)
+  const treatmentMap = {};
+  offset = 0;
+  blocks.forEach(b => {
+    b.arms.forEach((arm, i) => {
+      const key = arm.name;
+      if (!treatmentMap[key]) treatmentMap[key] = [];
+      treatmentMap[key].push({
+        platform: b.platform,
+        effect: b.effects[i],
+        rawEffect: b.adjustments ? b.effects[i] + b.adjustments[i] : b.effects[i],
+        adjustment: b.adjustments ? b.adjustments[i] : 0,
+        se: arm.se,
+        n: arm.n,
+        globalIdx: offset + i
+      });
+      offset++;
+    });
+    // offset already advanced inside the loop
+    offset -= b.arms.length; // fix: we advanced inside forEach
+    offset += b.K;
+  });
+
+  // Compute per-treatment pooled estimates (using weights from Vinv diagonal)
+  const treatmentResults = {};
+  for (const [trt, entries] of Object.entries(treatmentMap)) {
+    if (entries.length === 1) {
+      const e = entries[0];
+      const v = e.se * e.se + tau2;
+      treatmentResults[trt] = {
+        pooled: e.effect,
+        se: Math.sqrt(v),
+        entries: entries,
+        nTrials: 1
+      };
+    } else {
+      // Simple inverse-variance pooling for same treatment across platforms
+      let sumW = 0, sumWE = 0;
+      entries.forEach(e => {
+        const v = e.se * e.se + tau2;
+        const w = 1 / v;
+        sumW += w;
+        sumWE += w * e.effect;
+      });
+      treatmentResults[trt] = {
+        pooled: sumWE / sumW,
+        se: Math.sqrt(1 / sumW),
+        entries: entries,
+        nTrials: entries.length
+      };
+    }
+  }
+
+  // Compute Q and I^2
+  const allEffects = [];
+  const allVars = [];
+  offset = 0;
+  blocks.forEach(b => {
+    b.arms.forEach((arm, i) => {
+      allEffects.push(b.effects[i]);
+      allVars.push(arm.se * arm.se);
+    });
+  });
+  const w = allVars.map(v => 1 / v);
+  const sumW = w.reduce((a, b) => a + b, 0);
+  const wMean = allEffects.reduce((s, e, i) => s + w[i] * e, 0) / sumW;
+  let Q = 0;
+  for (let i = 0; i < allEffects.length; i++) {
+    Q += w[i] * Math.pow(allEffects[i] - wMean, 2);
+  }
+  const df = allEffects.length - 1;
+  const I2 = df > 0 ? Math.max(0, (Q - df) / Q) * 100 : 0;
+
+  return {
+    overall: { beta, se: betaSE, ci_lo: beta - 1.96 * betaSE, ci_hi: beta + 1.96 * betaSE },
+    blocks,
+    treatments: treatmentResults,
+    tau2,
+    Q,
+    I2,
+    k: totalK
+  };
+}
+
+// ===== ANALYSIS RESULTS STORE =====
+let lastResults = null;
+let lastPlatforms = null;
+
+// ===== MAIN ANALYSIS =====
+function runAnalysis() {
+  try {
+    const csv = document.getElementById('csv-input').value.trim();
+    if (!csv) { showStatus('Please paste CSV data or load demo.', 'err'); return; }
+
+    const mode = document.getElementById('input-mode').value;
+    const { rows } = parseCSV(csv);
+    const platforms = mode === 'per-arm' ? structurePerArm(rows) : structurePreComputed(rows);
+
+    if (platforms.length === 0) { showStatus('No valid platform data found.', 'err'); return; }
+
+    // Count treatment arms
+    let totalArms = 0;
+    platforms.forEach(p => { totalArms += p.arms.length; });
+    if (totalArms === 0) { showStatus('No treatment arms found.', 'err'); return; }
+
+    // Estimate or use manual tau^2
+    const tauMode = document.getElementById('tau-mode').value;
+    let tau2;
+    if (tauMode === 'manual') {
+      tau2 = parseFloat(document.getElementById('tau-manual').value);
+      if (!isFinite(tau2) || tau2 < 0) tau2 = 0;
+    } else {
+      // DL estimation across all comparisons
+      const allEffects = [];
+      const allVars = [];
+      platforms.forEach(p => {
+        p.arms.forEach(a => {
+          allEffects.push(a.effect);
+          allVars.push(a.se * a.se);
+        });
+      });
+      tau2 = estimateTauDL(allEffects, allVars);
+    }
+
+    const useNCA = document.getElementById('nca-toggle').checked;
+
+    // Pool
+    const results = poolGLS(platforms, tau2, useNCA);
+    if (!results) { showStatus('Pooling failed (singular matrix).', 'err'); return; }
+
+    lastResults = results;
+    lastPlatforms = platforms;
+
+    // Render results
+    document.getElementById('results-section').style.display = 'block';
+    renderTimeline(platforms);
+    renderForest(results, platforms);
+    renderCovMatrices(results);
+    renderSummary(results);
+
+    if (useNCA) {
+      document.getElementById('nca-card').style.display = 'block';
+      renderNCA(results, platforms, tau2);
+    } else {
+      document.getElementById('nca-card').style.display = 'none';
+    }
+
+    showStatus(`Analysis complete: ${platforms.length} platforms, ${totalArms} comparisons, tau^2 = ${tau2.toFixed(4)}, I^2 = ${results.I2.toFixed(1)}%`, 'ok');
+  } catch (e) {
+    showStatus('Error: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ===== RENDERING: TIMELINE =====
+function renderTimeline(platforms) {
+  const container = document.getElementById('timeline-container');
+  const margin = { top: 30, right: 30, bottom: 40, left: 140 };
+  const rowH = 28;
+
+  // Collect all arms
+  const allArms = [];
+  const colors = ['#4fc3f7', '#7c4dff', '#69f0ae', '#ffd740', '#ff5252', '#e040fb'];
+  platforms.forEach((p, pi) => {
+    if (p.control) {
+      allArms.push({ ...p.control, platform: p.name, color: colors[pi % colors.length], isControl: true });
+    }
+    p.arms.forEach(a => {
+      allArms.push({ ...a, platform: p.name, color: colors[pi % colors.length], isControl: false });
+    });
+  });
+
+  const maxMonth = Math.max(...allArms.map(a => a.endMonth || 12));
+  const width = Math.max(600, 140 + maxMonth * 20 + margin.right);
+  const height = margin.top + allArms.length * rowH + margin.bottom;
+
+  const xScale = (m) => margin.left + (m / maxMonth) * (width - margin.left - margin.right);
+
+  let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" id="timeline-svg">`;
+  svg += `<rect width="${width}" height="${height}" fill="transparent"/>`;
+
+  // Title
+  svg += `<text x="${width/2}" y="18" text-anchor="middle" fill="${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}" font-size="13" font-weight="600">Platform Trial Timeline (Months)</text>`;
+
+  // Axis
+  for (let m = 0; m <= maxMonth; m += Math.max(1, Math.round(maxMonth / 12))) {
+    const x = xScale(m);
+    svg += `<line x1="${x}" y1="${margin.top}" x2="${x}" y2="${margin.top + allArms.length * rowH}" stroke="rgba(100,140,220,0.1)" stroke-width="1"/>`;
+    svg += `<text x="${x}" y="${height - 10}" text-anchor="middle" fill="#8a9bc0" font-size="10">${m}</text>`;
+  }
+
+  // Bars
+  allArms.forEach((arm, i) => {
+    const y = margin.top + i * rowH + 4;
+    const x1 = xScale(arm.startMonth || 0);
+    const x2 = xScale(arm.endMonth || 12);
+    const barH = rowH - 8;
+    const opacity = arm.isControl ? 0.5 : 0.8;
+
+    // Label
+    svg += `<text x="${margin.left - 8}" y="${y + barH/2 + 4}" text-anchor="end" class="gantt-text">${arm.platform}: ${arm.name}</text>`;
+
+    // Bar
+    svg += `<rect x="${x1}" y="${y}" width="${Math.max(2, x2 - x1)}" height="${barH}" fill="${arm.color}" opacity="${opacity}" rx="3" ry="3" class="gantt-bar"/>`;
+
+    // N label
+    if (arm.n) {
+      svg += `<text x="${x2 + 5}" y="${y + barH/2 + 4}" fill="#8a9bc0" font-size="9">n=${arm.n}</text>`;
+    }
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+// ===== RENDERING: FOREST PLOT =====
+function renderForest(results, platforms) {
+  const container = document.getElementById('forest-container');
+  const margin = { top: 40, right: 120, bottom: 40, left: 220 };
+  const rowH = 26;
+
+  // Build rows: grouped by platform, then overall
+  const rows = [];
+  const platformSummaries = [];
+
+  platforms.forEach(p => {
+    const block = results.blocks.find(b => b.platform === p.name);
+    if (!block) return;
+
+    // Platform header
+    rows.push({ type: 'header', label: p.name });
+
+    block.arms.forEach((arm, i) => {
+      const eff = block.effects[i];
+      const se = arm.se;
+      const v = se * se + results.tau2;
+      const ci_lo = eff - 1.96 * Math.sqrt(v);
+      const ci_hi = eff + 1.96 * Math.sqrt(v);
+      const weight = (1 / v);
+      rows.push({
+        type: 'study',
+        label: `  ${arm.name}`,
+        effect: eff,
+        ci_lo,
+        ci_hi,
+        se: Math.sqrt(v),
+        weight,
+        n: arm.n,
+        platform: p.name
+      });
+    });
+
+    // Platform subtotal
+    if (block.arms.length > 1) {
+      // Quick IV pool for this platform
+      let sumW = 0, sumWE = 0;
+      block.arms.forEach((arm, i) => {
+        const v = arm.se * arm.se + results.tau2;
+        const w = 1 / v;
+        sumW += w;
+        sumWE += w * block.effects[i];
+      });
+      const pEff = sumWE / sumW;
+      const pSE = Math.sqrt(1 / sumW);
+      rows.push({
+        type: 'subtotal',
+        label: `${p.name} (subtotal)`,
+        effect: pEff,
+        ci_lo: pEff - 1.96 * pSE,
+        ci_hi: pEff + 1.96 * pSE,
+        se: pSE
+      });
+    }
+
+    rows.push({ type: 'spacer' });
+  });
+
+  // Overall
+  rows.push({
+    type: 'overall',
+    label: 'Overall (GLS)',
+    effect: results.overall.beta,
+    ci_lo: results.overall.ci_lo,
+    ci_hi: results.overall.ci_hi,
+    se: results.overall.se
+  });
+
+  const width = 800;
+  const height = margin.top + rows.length * rowH + margin.bottom;
+
+  // Scale: log HR displayed as HR
+  const allEffects = rows.filter(r => r.effect !== undefined).map(r => r.effect);
+  const allCIs = rows.filter(r => r.ci_lo !== undefined).flatMap(r => [r.ci_lo, r.ci_hi]);
+  const minE = Math.min(...allCIs, -0.5);
+  const maxE = Math.max(...allCIs, 0.3);
+  const range = maxE - minE;
+  const plotLeft = margin.left;
+  const plotRight = width - margin.right;
+  const plotW = plotRight - plotLeft;
+  const xScale = (e) => plotLeft + ((e - minE) / range) * plotW;
+
+  // Max weight for sizing
+  const maxW = Math.max(...rows.filter(r => r.weight).map(r => r.weight), 1);
+
+  let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" id="forest-svg">`;
+  svg += `<rect width="${width}" height="${height}" fill="transparent"/>`;
+
+  // Null line
+  const nullX = xScale(0);
+  svg += `<line x1="${nullX}" y1="${margin.top}" x2="${nullX}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="4,3"/>`;
+
+  // Axis ticks (HR scale)
+  const hrTicks = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3];
+  hrTicks.forEach(hr => {
+    const logHR = Math.log(hr);
+    if (logHR >= minE && logHR <= maxE) {
+      const x = xScale(logHR);
+      svg += `<line x1="${x}" y1="${height - margin.bottom}" x2="${x}" y2="${height - margin.bottom + 5}" stroke="#8a9bc0" stroke-width="1"/>`;
+      svg += `<text x="${x}" y="${height - margin.bottom + 18}" text-anchor="middle" fill="#8a9bc0" font-size="10">${hr.toFixed(1)}</text>`;
+    }
+  });
+
+  // Axis label
+  svg += `<text x="${(plotLeft + plotRight)/2}" y="${height - 5}" text-anchor="middle" fill="#8a9bc0" font-size="11">Hazard Ratio</text>`;
+
+  // Header labels
+  svg += `<text x="${plotLeft}" y="${margin.top - 15}" fill="${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}" font-size="11" font-weight="600">Favors Treatment</text>`;
+  svg += `<text x="${plotRight}" y="${margin.top - 15}" text-anchor="end" fill="#ff5252" font-size="11" font-weight="600">Favors Control</text>`;
+
+  // HR column header
+  svg += `<text x="${width - 10}" y="${margin.top - 15}" text-anchor="end" fill="#8a9bc0" font-size="10">HR [95% CI]</text>`;
+
+  rows.forEach((row, i) => {
+    const y = margin.top + i * rowH + rowH / 2;
+
+    if (row.type === 'header') {
+      svg += `<text x="10" y="${y + 4}" fill="${getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()}" font-size="12" font-weight="700">${row.label}</text>`;
+      svg += `<line x1="${plotLeft}" y1="${y + 10}" x2="${plotRight}" y2="${y + 10}" stroke="rgba(100,140,220,0.1)" stroke-width="1"/>`;
+    } else if (row.type === 'spacer') {
+      // nothing
+    } else if (row.type === 'study') {
+      // Label
+      svg += `<text x="20" y="${y + 4}" fill="#e0e6f0" font-size="11">${row.label}</text>`;
+
+      // CI line
+      const x1 = Math.max(plotLeft, xScale(row.ci_lo));
+      const x2 = Math.min(plotRight, xScale(row.ci_hi));
+      svg += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" class="forest-ci"/>`;
+
+      // Square (size proportional to weight)
+      const sqSize = 4 + 10 * (row.weight / maxW);
+      const cx = xScale(row.effect);
+      if (cx >= plotLeft && cx <= plotRight) {
+        svg += `<rect x="${cx - sqSize/2}" y="${y - sqSize/2}" width="${sqSize}" height="${sqSize}" class="forest-square"/>`;
+      }
+
+      // HR label
+      const hr = Math.exp(row.effect);
+      const hrLo = Math.exp(row.ci_lo);
+      const hrHi = Math.exp(row.ci_hi);
+      svg += `<text x="${width - 10}" y="${y + 4}" text-anchor="end" fill="#e0e6f0" font-size="10">${hr.toFixed(2)} [${hrLo.toFixed(2)}, ${hrHi.toFixed(2)}]</text>`;
+
+    } else if (row.type === 'subtotal' || row.type === 'overall') {
+      // Label
+      const fill = row.type === 'overall' ? '#ffd740' : '#69f0ae';
+      svg += `<text x="10" y="${y + 4}" fill="${fill}" font-size="12" font-weight="600">${row.label}</text>`;
+
+      // Diamond
+      const cx = xScale(row.effect);
+      const x1 = Math.max(plotLeft, xScale(row.ci_lo));
+      const x2 = Math.min(plotRight, xScale(row.ci_hi));
+      const dh = 8;
+      const diamondFill = row.type === 'overall' ? '#ffd740' : '#69f0ae';
+      svg += `<polygon points="${x1},${y} ${cx},${y - dh} ${x2},${y} ${cx},${y + dh}" fill="${diamondFill}" opacity="0.7"/>`;
+
+      // HR label
+      const hr = Math.exp(row.effect);
+      const hrLo = Math.exp(row.ci_lo);
+      const hrHi = Math.exp(row.ci_hi);
+      svg += `<text x="${width - 10}" y="${y + 4}" text-anchor="end" fill="${fill}" font-size="10" font-weight="600">${hr.toFixed(2)} [${hrLo.toFixed(2)}, ${hrHi.toFixed(2)}]</text>`;
+    }
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+// ===== RENDERING: COVARIANCE MATRICES =====
+function renderCovMatrices(results) {
+  const container = document.getElementById('cov-container');
+  let html = '';
+
+  results.blocks.forEach(b => {
+    if (b.K < 2) return; // Only show for multi-arm
+
+    html += `<h3 style="color:var(--accent);font-size:0.95rem;margin:12px 0 6px">${b.platform} (${b.K} arms, shared control)</h3>`;
+    html += '<div class="cov-matrix"><table>';
+
+    // Header
+    html += '<tr><th></th>';
+    b.arms.forEach(a => { html += `<th style="font-size:0.8rem">${a.name}</th>`; });
+    html += '</tr>';
+
+    // Rows
+    for (let i = 0; i < b.K; i++) {
+      html += `<tr><td style="font-weight:600;color:var(--accent);font-size:0.8rem">${b.arms[i].name}</td>`;
+      for (let j = 0; j < b.K; j++) {
+        const cls = i === j ? 'cov-diag' : 'cov-offdiag';
+        html += `<td class="${cls}">${b.V[i][j].toFixed(5)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table></div>';
+
+    // Annotation
+    html += `<div style="font-size:0.78rem;color:var(--text2);margin-top:4px">Diagonal: SE^2 + tau^2 | Off-diagonal: tau^2/2 = ${(results.tau2 / 2).toFixed(5)} (shared control)</div>`;
+  });
+
+  if (!html) {
+    html = '<div style="color:var(--text2);font-size:0.88rem">No multi-arm platforms (covariance only applies when >1 treatment arm shares a control).</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ===== RENDERING: NCA =====
+function renderNCA(results, platforms, tau2) {
+  const container = document.getElementById('nca-container');
+  let html = '<table><thead><tr><th>Platform</th><th>Treatment</th><th>Raw Effect</th><th>Adjustment</th><th>Adjusted Effect</th><th>Drift Rate</th></tr></thead><tbody>';
+
+  let anyAdjusted = false;
+  results.blocks.forEach(b => {
+    b.arms.forEach((arm, i) => {
+      const adj = b.adjustments ? b.adjustments[i] : 0;
+      const raw = b.effects[i] + adj;
+      const adjusted = b.effects[i];
+      if (Math.abs(adj) > 1e-10) anyAdjusted = true;
+
+      html += `<tr>
+        <td>${b.platform}</td>
+        <td>${arm.name}</td>
+        <td>${raw.toFixed(4)}</td>
+        <td style="color:${Math.abs(adj) > 1e-10 ? 'var(--gold)' : 'var(--text2)'}">${adj.toFixed(4)}</td>
+        <td>${adjusted.toFixed(4)}</td>
+        <td>${b.adjustments ? (b.adjustments[i] !== 0 ? 'Applied' : 'None') : 'N/A'}</td>
+      </tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+
+  if (!anyAdjusted) {
+    html += '<div class="status-bar status-warn" style="margin-top:8px">No temporal drift detected (all arms concurrent within each platform).</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ===== RENDERING: SUMMARY TABLE =====
+function renderSummary(results) {
+  const container = document.getElementById('summary-container');
+
+  let html = '<table><thead><tr><th>Treatment</th><th>Pooled HR</th><th>95% CI</th><th>Weight</th><th>Trials</th></tr></thead><tbody>';
+
+  for (const [trt, data] of Object.entries(results.treatments)) {
+    const hr = Math.exp(data.pooled);
+    const lo = Math.exp(data.pooled - 1.96 * data.se);
+    const hi = Math.exp(data.pooled + 1.96 * data.se);
+    const totalW = 1 / (data.se * data.se);
+    const platforms = data.entries.map(e => e.platform).join(', ');
+
+    html += `<tr>
+      <td style="font-weight:600">${trt}</td>
+      <td>${hr.toFixed(3)}</td>
+      <td>[${lo.toFixed(3)}, ${hi.toFixed(3)}]</td>
+      <td>${totalW.toFixed(2)}</td>
+      <td>${data.nTrials} (${platforms})</td>
+    </tr>`;
+  }
+
+  // Overall
+  const oHR = Math.exp(results.overall.beta);
+  const oLo = Math.exp(results.overall.ci_lo);
+  const oHi = Math.exp(results.overall.ci_hi);
+  html += `<tr style="background:rgba(255,215,64,0.08);font-weight:700">
+    <td>Overall (GLS)</td>
+    <td>${oHR.toFixed(3)}</td>
+    <td>[${oLo.toFixed(3)}, ${oHi.toFixed(3)}]</td>
+    <td>-</td>
+    <td>${results.k} comparisons</td>
+  </tr>`;
+
+  html += '</tbody></table>';
+
+  // Heterogeneity stats
+  html += `<div style="margin-top:12px;padding:10px;background:rgba(20,28,45,0.6);border-radius:8px;font-size:0.85rem">
+    <span style="color:var(--accent)">Heterogeneity:</span>
+    tau^2 = ${results.tau2.toFixed(4)} |
+    Q = ${results.Q.toFixed(2)} (df = ${results.k - 1}) |
+    I^2 = ${results.I2.toFixed(1)}%
+    <br><span style="color:var(--text2);font-size:0.8rem">Note: Shared control arm correlation (tau^2/2) accounted for in GLS pooling for multi-arm platform trials.</span>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+// ===== EXPORT =====
+function exportCSV() {
+  if (!lastResults) { showStatus('Run analysis first.', 'warn'); return; }
+  let csv = 'Treatment,PooledLogHR,PooledHR,SE,CI_Lower,CI_Upper,NumTrials,Platforms\n';
+  for (const [trt, data] of Object.entries(lastResults.treatments)) {
+    const hr = Math.exp(data.pooled);
+    const lo = Math.exp(data.pooled - 1.96 * data.se);
+    const hi = Math.exp(data.pooled + 1.96 * data.se);
+    const platforms = data.entries.map(e => e.platform).join(';');
+    csv += `${trt},${data.pooled.toFixed(5)},${hr.toFixed(5)},${data.se.toFixed(5)},${lo.toFixed(5)},${hi.toFixed(5)},${data.nTrials},${platforms}\n`;
+  }
+  csv += `\nOverall,${lastResults.overall.beta.toFixed(5)},${Math.exp(lastResults.overall.beta).toFixed(5)},${lastResults.overall.se.toFixed(5)},${Math.exp(lastResults.overall.ci_lo).toFixed(5)},${Math.exp(lastResults.overall.ci_hi).toFixed(5)},${lastResults.k},all\n`;
+  csv += `\ntau2,${lastResults.tau2.toFixed(6)}\nI2,${lastResults.I2.toFixed(2)}\nQ,${lastResults.Q.toFixed(4)}\n`;
+
+  downloadBlob(csv, 'platform-trial-ma-results.csv', 'text/csv');
+}
+
+function exportSVG(containerId, filename) {
+  const container = document.getElementById(containerId);
+  const svgEl = container.querySelector('svg');
+  if (!svgEl) { showStatus('No SVG to export.', 'warn'); return; }
+  const svgData = new XMLSerializer().serializeToString(svgEl);
+  downloadBlob(svgData, filename, 'image/svg+xml');
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Expose for testing
+window._ptma = {
+  parseCSV,
+  structurePerArm,
+  structurePreComputed,
+  estimateTauDL,
+  buildCovBlock,
+  poolGLS,
+  invertMatrix,
+  ensurePD,
+  matMul,
+  matT,
+  computeDriftAdjustment,
+  loadDemo,
+  runAnalysis,
+  exportCSV,
+  getResults: () => lastResults,
+  getPlatforms: () => lastPlatforms
+};
+</script>
+</body>
+</html>
